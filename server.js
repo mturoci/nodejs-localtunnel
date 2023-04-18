@@ -70,6 +70,7 @@ export default function (opt) {
 
       const url = schema + '://' + info.id + '.' + ctx.request.host
       info.url = url
+      info.ip = '35.85.251.43'
       ctx.body = info
       return
     }
