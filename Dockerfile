@@ -11,4 +11,4 @@ COPY . /app
 EXPOSE 3000
 
 ENV NODE_ENV=production
-ENTRYPOINT ["node", "./bin/server", "--port", "3000"]
+ENTRYPOINT ["node", "./bin/server", "--port", "3000", "--ip", "35.85.251.43"]

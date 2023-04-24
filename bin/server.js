@@ -29,6 +29,10 @@ const argv = optimist
     default: 10,
     describe: 'maximum number of tcp sockets each client is allowed to establish at one time (the tunnels)'
   })
+  .options('ip', {
+    default: undefined,
+    describe: 'IP address to inform to client'
+  })
   .argv
 
 if (argv.help) {
@@ -40,6 +44,7 @@ const server = CreateServer({
   max_tcp_sockets: argv['max-sockets'],
   secure: argv.secure,
   domain: argv.domain,
+  ip: argv.ip
 })
 
 server.listen(argv.port, argv.address, () => {
