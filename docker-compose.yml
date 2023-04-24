@@ -1,5 +1,6 @@
 version: '3.8'
 
+# NOTICE: Works on Linux only. Requires ssl folder with server.cert and server.key files to be in this directory.
 services:
   nginx:
     image: defunctzombie/localtunnel-nginx:latest
