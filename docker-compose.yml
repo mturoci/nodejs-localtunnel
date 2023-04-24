@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: defunctzombie/localtunnel-nginx:latest
+    restart: always
+    network_mode: host # Works on Linux only.
+    volumes:
+      - ./ssl:/etc/nginx/ssl/
+  server:
+    build: .
+    network_mode: host # Works on Linux only.
+    restart: always
