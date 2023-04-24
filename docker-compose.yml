@@ -3,12 +3,16 @@ version: '3.8'
 # NOTICE: Works on Linux only. Requires ssl folder with server.cert and server.key files to be in this directory.
 services:
   nginx:
-    image: defunctzombie/localtunnel-nginx:latest
+    build:
+      context: .
+      dockerfile: nginx.dockerfile
     restart: always
     network_mode: host # Works on Linux only.
     volumes:
       - ./ssl:/etc/nginx/ssl/
   server:
-    build: .
+    build:
+      context: .
+      dockerfile: server.dockerfile
     network_mode: host # Works on Linux only.
     restart: always
