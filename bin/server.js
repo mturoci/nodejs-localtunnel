@@ -33,6 +33,12 @@ const argv = optimist
     default: undefined,
     describe: 'IP address to inform to client'
   })
+  .options('ssl-certificate', {
+    describe: 'Absolute path to SSL certificate',
+  })
+  .options('ssl-key', {
+    describe: 'Absolute path to SSL key',
+  })
   .argv
 
 if (argv.help) {
@@ -44,7 +50,9 @@ const server = CreateServer({
   max_tcp_sockets: argv['max-sockets'],
   secure: argv.secure,
   domain: argv.domain,
-  ip: argv.ip
+  ip: argv.ip,
+  sslCert: argv['ssl-certificate'],
+  sslKey: argv['ssl-key'],
 })
 
 server.listen(argv.port, argv.address, () => {
