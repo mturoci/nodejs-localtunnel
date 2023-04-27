@@ -34,10 +34,10 @@ const argv = optimist
     describe: 'IP address to inform to client'
   })
   .options('ssl-cert', {
-    describe: 'Absolute path to SSL certificate',
+    describe: 'Path to SSL certificate',
   })
   .options('ssl-key', {
-    describe: 'Absolute path to SSL key',
+    describe: 'Path to SSL key',
   })
   .argv
 
@@ -51,7 +51,7 @@ const server = CreateServer({
   secure: argv.secure,
   domain: argv.domain,
   ip: argv.ip,
-  sslCert: argv['ssl-certificate'],
+  sslCert: argv['ssl-cert'],
   sslKey: argv['ssl-key'],
 })
 
