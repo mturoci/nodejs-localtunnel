@@ -2,6 +2,7 @@ import Koa from 'koa'
 import tldjs from 'tldjs'
 import Debug from 'debug'
 import http from 'http'
+import https from 'https'
 import { hri } from 'human-readable-ids'
 import Router from 'koa-router'
 
@@ -112,7 +113,9 @@ export default function (opt) {
     return
   })
 
-  const server = http.createServer()
+  const server = opt.sslCert && opt.sslKey
+    ? https.createServer({ key: opt.sslKey, cert: opt.sslCert })
+    : http.createServer()
 
   const appCallback = app.callback()
 
