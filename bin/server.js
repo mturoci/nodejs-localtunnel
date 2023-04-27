@@ -33,7 +33,7 @@ const argv = optimist
     default: undefined,
     describe: 'IP address to inform to client'
   })
-  .options('ssl-certificate', {
+  .options('ssl-cert', {
     describe: 'Absolute path to SSL certificate',
   })
   .options('ssl-key', {
