@@ -2,6 +2,7 @@ import Koa from 'koa'
 import tldjs from 'tldjs'
 import Debug from 'debug'
 import http from 'http'
+import https from 'https'
 import { hri } from 'human-readable-ids'
 import Router from 'koa-router'
 
@@ -12,9 +13,8 @@ const debug = Debug('localtunnel:server')
 export default function (opt) {
   opt = opt || {}
 
-  const validHosts = (opt.domain) ? [opt.domain] : undefined
+  const validHosts = opt.domain ? [opt.domain] : undefined
   const myTldjs = tldjs.fromUserSettings({ validHosts })
-  const landingPage = opt.landing || 'https://localtunnel.github.io/www/'
 
   function GetClientIdFromHostname(hostname) {
     return myTldjs.getSubdomain(hostname)
@@ -76,7 +76,7 @@ export default function (opt) {
     }
 
     // no new client request, send to landing page
-    ctx.redirect(landingPage)
+    ctx.redirect(opt.landing || 'https://wave.h2o.ai/')
   })
 
   // anything after the / path is a request for a specific client name
@@ -113,7 +113,9 @@ export default function (opt) {
     return
   })
 
-  const server = http.createServer()
+  const server = opt.sslCert && opt.sslKey
+    ? https.createServer({ key: opt.sslKey, cert: opt.sslCert })
+    : http.createServer()
 
   const appCallback = app.callback()
 

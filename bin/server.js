@@ -3,10 +3,18 @@ import optimist from 'optimist'
 
 import log from 'book'
 import Debug from 'debug'
+import fs from 'fs'
 
 import CreateServer from '../server.js'
 
 const debug = Debug('localtunnel')
+const readFile = path => {
+  try {
+    return fs.readFileSync(path)
+  } catch (error) {
+    console.error(`Failed to read file: ${path}`)
+  }
+}
 
 const argv = optimist
   .usage('Usage: $0 --port [num]')
@@ -33,6 +41,12 @@ const argv = optimist
     default: undefined,
     describe: 'IP address to inform to client'
   })
+  .options('ssl-cert', {
+    describe: 'Path to SSL certificate',
+  })
+  .options('ssl-key', {
+    describe: 'Path to SSL key',
+  })
   .argv
 
 if (argv.help) {
@@ -44,28 +58,15 @@ const server = CreateServer({
   max_tcp_sockets: argv['max-sockets'],
   secure: argv.secure,
   domain: argv.domain,
-  ip: argv.ip
+  ip: argv.ip,
+  sslCert: readFile(argv['ssl-cert']),
+  sslKey: readFile(argv['ssl-key']),
 })
 
-server.listen(argv.port, argv.address, () => {
-  debug('server listening on port: %d', server.address().port)
-})
-
-process.on('SIGINT', () => {
-  process.exit()
-})
-
-process.on('SIGTERM', () => {
-  process.exit()
-})
-
-process.on('uncaughtException', (err) => {
-  log.error(err)
-})
-
-process.on('unhandledRejection', (reason, promise) => {
-  log.error(reason)
-})
+server.listen(argv.port, argv.address, () => debug('server listening on port: %d', server.address().port))
+process.on('SIGINT', () => process.exit())
+process.on('SIGTERM', () => process.exit())
+process.on('uncaughtException', err => log.error(err))
+process.on('unhandledRejection', (reason, promise) => log.error(reason))
 
 // vim: ft=javascript
-
