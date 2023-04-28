@@ -1,70 +1,149 @@
 # localtunnel-server
 
-[![Build Status](https://travis-ci.org/localtunnel/server.svg?branch=master)](https://travis-ci.org/localtunnel/server)
+Fork of <https://github.com/localtunnel/server> with E2E encryption.
 
-localtunnel exposes your localhost to the world for easy testing and sharing! No need to mess with DNS or deploy just to have others test out your changes.
+## Architecture
 
-This repo is the server component. If you are just looking for the CLI localtunnel app, see (https://github.com/localtunnel/localtunnel).
+Used terms:
 
-## overview ##
+* UI - Browser connection to e.g. <https://my-app.example.com>.
+* Nginx - Reverse proxy server - <https://www.nginx.com/>.
+* Server - forked [Localtunnel server](https://github.com/localtunnel/server). Written in NodeJS.
 
-The default localtunnel client connects to the `localtunnel.me` server. You can, however, easily set up and run your own server. In order to run your own localtunnel server you must ensure that your server can meet the following requirements:
-
-* You can set up DNS entries for your `domain.tld` and `*.domain.tld` (or `sub.domain.tld` and `*.sub.domain.tld`).
-* The server can accept incoming TCP connections for any non-root TCP port (i.e. ports over 1000).
-
-The above are important as the client will ask the server for a subdomain under a particular domain. The server will listen on any OS-assigned TCP port for client connections.
-
-#### setup
-
-```shell
-# pick a place where the files will live
-git clone git://github.com/defunctzombie/localtunnel-server.git
-cd localtunnel-server
-npm install
-
-# server set to run on port 1234
-bin/server --port 1234
+```mermaid
+flowchart TD
+    UI1 <--> Nginx
+    UI2 <--> Nginx
+    UI3 <--> Nginx
+    subgraph Backend
+        Nginx
+        Server
+    end
+    Nginx <--> Server
+    Server
+    Nginx <--Register--> Client1 
+    Server <--TCP SOCKET--> Client1
+    Nginx <--Register--> Client2
+    Server <--TCP SOCKET--> Client2
+    Server <--TCP SOCKET--> Client3
+    Nginx <--Register--> Client3 
 ```
 
-The localtunnel server is now running and waiting for client requests on port 1234. You will most likely want to set up a reverse proxy to listen on port 80 (or start localtunnel on port 80 directly).
+### Client registration low
 
-**NOTE** By default, localtunnel will use subdomains for clients, if you plan to host your localtunnel server itself on a subdomain you will need to use the _--domain_ option and specify the domain name behind which you are hosting localtunnel. (i.e. my-localtunnel-server.example.com)
+```mermaid
+sequenceDiagram
+    participant LocalSocket
+    participant Client
+    participant Nginx
+    participant Server
 
-#### use your server
-
-You can now use your domain with the `--host` flag for the `lt` client.
-
-```shell
-lt --host http://sub.example.tld:1234 --port 9000
+    Client ->> Nginx: Register HTTP GET
+    Nginx ->> Server: Forward register
+    Server ->> Nginx: Respond with share URL and TCP port to connect.
+    Nginx ->> Client: Forward register response
+    Client ->> Server: Establish multiple TCP connections for multiplexing (remote socket)
+    Client ->> LocalSocket: Establish multiple TCP connections for multiplexing
 ```
 
-You will be assigned a URL similar to `heavy-puma-9.sub.example.com:1234`.
+* Client sends an HTTP GET request to Nginx, which forwards it to the server.
+* The server starts a TCP server on a free port and sends the port number in response along with a generated share URL.
+* Client creates `max_conn_count` number of threads to allow multiplexing. Each thread creates 2 TCP connections (tunnels).
+  * Local socket - connection to locally running service that the user wants to expose.
+  * Remote socket - connection to the remote server (TLS encrypted).
 
-If your server is acting as a reverse proxy (i.e. nginx) and is able to listen on port 80, then you do not need the `:1234` part of the hostname for the `lt` client.
+### URL connection flow
 
-## REST API
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant Nginx
+    participant Server
+    participant Client
+    participant LocalService
 
-### POST /api/tunnels
-
-Create a new tunnel. A LocalTunnel client posts to this enpoint to request a new tunnel with a specific name or a randomly assigned name.
-
-### GET /api/status
-
-General server information.
-
-## Deploy
-
-You can deploy your own localtunnel server using the prebuilt docker image.
-
-**Note** This assumes that you have a proxy in front of the server to handle the http(s) requests and forward them to the localtunnel server on port 3000. You can use our [localtunnel-nginx](https://github.com/localtunnel/nginx) to accomplish this.
-
-If you do not want ssl support for your own tunnel (not recommended), then you can just run the below with `--port 80` instead.
+    Browser ->> Nginx: Visit URL
+    Nginx ->> Server: Forward
+    Server ->> Client: Pipe to TCP socket for this subdomain 
+    Client ->> LocalService: Forward from remote socket to local socket
+    LocalService ->> Client: Respond into local TCP socket
+    Client ->> Server: Pipe from local to remote TCP socket
+    Server ->> Nginx: Pipe into response
+    Nginx ->> Browser: Respond 
 
 ```
-docker run -d \
-    --restart always \
-    --name localtunnel \
-    --net host \
-    defunctzombie/localtunnel-server:latest --port 3000
+
+* Share URL points to Nginx which appends proxy headers and forwards all requests to the Localtunnel server.
+* Based on the subdomain provided, the server streams the requests into an open TCP connection and waits for the data.
+* Data flow: Browser -> Nginx -> Server -> Client -> local socket -> Client -> Server -> Nginx -> Browser.
+
+### Future improvements
+
+The biggest problem the current architecture has is the need for opening all TCP connections, which might pose a security risk. The ideal architecture would only expose 3 ports:
+
+* HTTPS `:443`.
+* HTTP `:80`.
+* TCP connection `:TCP_SERVER_PORT`.
+
+This would allow for all traffic to flow through the Nginx, making up for simpler horizontal scaling and better security.
+
+```mermaid
+flowchart TD
+    UI1 <---> Nginx
+    UI2 <---> Nginx
+    UI3 <---> Nginx
+    subgraph Backend
+        Server
+
+        Nginx
+    end
+    Nginx <--> Server
+    Nginx <--Register + TCP---> Client1
+    Nginx <--Register + TCP---> Client2
+    Nginx <--Register + TCP---> Client3
 ```
+
+## Deployment
+
+The easiest way to deploy is to use a provided `docker-compose` file, but since both images (`nginx.dockerfile` and `server.dockerfile`) are super simple, it's not that much work to come up with a custom deployment.
+
+Currently deployable on Linux only due to `docker` supporting `network_mode: host` on Linux only. Running on different OS would require forwarding every single port of `server.dockerfile`.
+
+### Requirements
+
+* Docker compose - <https://docs.docker.com/compose/>
+* All TCP ports open for now (unfortunately). See the [Future improvements](#future-improvements) section on what is needed to mitigate this.
+* Valid TLS/SSL certificate within `ssl` folder. Needs to contain `server.crt` and `server.key` files (hardcoded within docker images currently).
+* Enough file descriptors available for the server process. Each client makes 10 TCP connections by default (can be configured via `max-sockets` server param) which translates to 10 file descriptors.
+
+Once all the requirements have been met:
+
+```sh
+docker-compose up
+```
+
+### System Limits
+
+Each server node is limited by:
+
+* Number of server ports - ~64k if we omit port numbers < 1000 which tend to have special meaning.
+* Number of server file descriptors (FD) - if we were to support 64k concurrent clients (^^), each connecting with 10 TCP sockets, a total of 640k FDs would be needed (which is slightly beyond the hard limit for most Linux machines anyway). Note that it's necessary to explicitly configure the FD limit for the server process.
+* RAM - Limits the amount of data that can flow through the system at a given time. Impossible to estimate since the system supports arbitrarily-sized data.
+
+### Sharing limits
+
+As previously mentioned, each client opens 10 TCP connections by default. 1 connection needs to be reserved for a persistent Websocket (WS) connection (case of [Wave](https://wave.h2o.ai/) and [Nitro](https://nitro.h2o.ai/)). Assume your app is running at `https://my-app.h2oai.app`.
+
+* Browser tab 1 connects to the URL - 1 persistent connection. Total client connections left - 9.
+* Browser tab 2 connects to the URL - 1 persistent connection. Total client connections left - 8.
+* And so on.
+
+This means the share URL can only be opened in 10 browser tabs at most. An ideal case is 2 - 3 max. If sharing among more people is needed, [H2O AI Cloud](https://h2oai.github.io/h2o-ai-cloud/) or any other hosting solution should be used instead.
+
+### Load balancing
+
+TBD.
+
+### Optimal network latency
+
+TBD.
